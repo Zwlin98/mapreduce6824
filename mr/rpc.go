@@ -12,12 +12,12 @@ import (
 import "strconv"
 
 type EmptyArgsOrReply struct {
-
 }
 
 type InterruptArgs struct {
 	Source string
 	Event  string
+	Args   string
 }
 
 type RegisterArgs struct {
@@ -28,15 +28,14 @@ type RegisterReply struct {
 }
 
 type TaskArgs struct {
-	Id int
-	Type int
-	Key string
+	Id     int
+	Type   int
+	Key    string
+	MapTaskNum int
 	Worker string
 }
 
-
 // Add your RPC definitions here.
-
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the master.

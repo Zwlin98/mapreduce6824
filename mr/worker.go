@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -34,17 +35,23 @@ func ihash(key string) int {
 }
 
 type WorkerDaemon struct {
-	Id      string
+	Id string
 
-	Status	int
-	StatusMutex sync.Mutex
+	Status      int
+	StatusMutex sync.RWMutex
 
 	mapF    func(string, string) []KeyValue
 	reduceF func(string, []string) string
 
 	nReduce int
 
-	exit    chan struct{}
+	exit chan struct{}
+}
+
+func (d *WorkerDaemon) SetStatus(status int) {
+	d.StatusMutex.Lock()
+	defer d.StatusMutex.Unlock()
+	d.Status = status
 }
 
 func (d *WorkerDaemon) AssignTask(args *TaskArgs, reply *EmptyArgsOrReply) error {
@@ -53,9 +60,15 @@ func (d *WorkerDaemon) AssignTask(args *TaskArgs, reply *EmptyArgsOrReply) error
 		{
 			log.Printf("Map Task %d is assigned to me", args.Id)
 			go d.doMapTask(args.Id, args.Key)
-			d.StatusMutex.Lock()
-			d.Status = Working
-			d.StatusMutex.Unlock()
+
+			d.SetStatus(Working)
+		}
+	case ReduceTask:
+		{
+			log.Printf("Reduce Task %d is assigned to me", args.Id)
+			go d.doReduceTask(args.Id, args.Key, args.MapTaskNum)
+
+			d.SetStatus(Working)
 		}
 	}
 	return nil
@@ -79,7 +92,7 @@ func (d *WorkerDaemon) doMapTask(id int, key string) {
 	reduces := make([][]KeyValue, d.nReduce)
 
 	for _, kv := range kva {
-		index := ihash(kv.Key) %d.nReduce
+		index := ihash(kv.Key) % d.nReduce
 		reduces[index] = append(reduces[index], kv)
 	}
 
@@ -98,10 +111,59 @@ func (d *WorkerDaemon) doMapTask(id int, key string) {
 	//time.Sleep(time.Second)
 	args, reply := TaskArgs{Id: id, Type: MapTask, Worker: d.Id}, EmptyArgsOrReply{}
 	if ok := callMaster("Master.TaskComplete", &args, &reply); ok {
-		d.StatusMutex.Lock()
-		d.Status = Idle
-		d.StatusMutex.Unlock()
+		d.SetStatus(Idle)
 		//TODO: free worker to execute another task
+	}
+}
+
+func (d *WorkerDaemon) doReduceTask(id int, key string, mapNum int) {
+	mp := make(map[string][]string)
+
+	for i := 0; i < mapNum; i++ {
+		fileName := fmt.Sprintf("mr-%d-%d.json", i, id)
+		file, err := os.Open(fileName)
+		if err != nil {
+			log.Printf("fail to open %v\n", fileName)
+			//TODO: Report error to master
+		}
+		dec := json.NewDecoder(file)
+		for {
+			var kv KeyValue
+			if err := dec.Decode(&kv); err != nil {
+				break
+			}
+			mp[kv.Key] = append(mp[kv.Key], kv.Value)
+		}
+	}
+
+	ofile := fmt.Sprintf("mr-out-%d.txt",id)
+	output,err := os.Create(ofile)
+	if err!=nil{
+		log.Printf("fail to create %v\n",ofile)
+		//TODO: Report error to master
+	}
+
+	for k,v := range mp{
+		output.WriteString(fmt.Sprintf("%v %v\n",k,d.reduceF(k,v)))
+	}
+
+	output.Close()
+
+	args, reply := TaskArgs{Id: id, Type: ReduceTask, Worker: d.Id}, EmptyArgsOrReply{}
+	if ok := callMaster("Master.TaskComplete", &args, &reply); ok {
+		d.SetStatus(Idle)
+		//TODO: free worker to execute another task
+	}
+
+}
+
+func (d *WorkerDaemon) ReportStatusToMaster(status int) {
+	args, reply := InterruptArgs{Source: d.Id, Event: "ReportStatus"}, EmptyArgsOrReply{}
+	args.Args = strconv.Itoa(status)
+	if ok := callMaster("Master.Interrupt", &args, &reply); ok {
+	} else {
+		log.Println("Report status to master error")
+		//TODO:
 	}
 }
 
@@ -115,7 +177,7 @@ func Worker(mapf func(string, string) []KeyValue,
 		mapF:    mapf,
 		reduceF: reducef,
 		exit:    make(chan struct{}),
-		Status: Initial,
+		Status:  Initial,
 	}
 
 	//Register worker to master
@@ -130,20 +192,13 @@ func Worker(mapf func(string, string) []KeyValue,
 
 	d.server()
 
-	d.StatusMutex.Lock()
-	d.Status = Idle
-	d.StatusMutex.Unlock()
+	d.SetStatus(Idle)
 
 	go func() {
 		for {
-			d.StatusMutex.Lock()
-			if d.Status == Idle{
-				args, reply := TaskArgs{Id: 986473, Type: MapTask, Worker: d.Id}, EmptyArgsOrReply{}
-				if ok := callMaster("Master.TaskComplete", &args, &reply); ok {
-					//TODO: free worker to execute another task
-				}
-			}
-			d.StatusMutex.Unlock()
+			d.StatusMutex.RLock()
+			go d.ReportStatusToMaster(d.Status)
+			d.StatusMutex.RUnlock()
 			time.Sleep(time.Second)
 		}
 	}()
