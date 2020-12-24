@@ -78,12 +78,14 @@ func (d *WorkerDaemon) doMapTask(id int, key string) {
 	file, err := os.Open(key)
 	if err != nil {
 		log.Printf("fail to open %v\n", key)
-		//TODO: Report Error to Master
+		d.SetStatus(Idle)
+		return
 	}
 	content, err := ioutil.ReadAll(file)
 	if err != nil {
 		log.Printf("fail to read %v\n", key)
-		//TODO: Report Error To Master
+		d.SetStatus(Idle)
+		return
 	}
 	file.Close()
 
@@ -105,14 +107,15 @@ func (d *WorkerDaemon) doMapTask(id int, key string) {
 			}
 		} else {
 			log.Printf("fail to create %v\n", ofile)
-			//TODO: Report error to Master
+			// tmp solution
+			d.SetStatus(Idle)
+			return
 		}
 	}
 	//time.Sleep(time.Second)
 	args, reply := TaskArgs{Id: id, Type: MapTask, Worker: d.Id}, EmptyArgsOrReply{}
 	if ok := callMaster("Master.TaskComplete", &args, &reply); ok {
 		d.SetStatus(Idle)
-		//TODO: free worker to execute another task
 	}
 }
 
@@ -124,7 +127,8 @@ func (d *WorkerDaemon) doReduceTask(id int, key string, mapNum int) {
 		file, err := os.Open(fileName)
 		if err != nil {
 			log.Printf("fail to open %v\n", fileName)
-			//TODO: Report error to master
+			d.SetStatus(Idle)
+			return
 		}
 		dec := json.NewDecoder(file)
 		for {
@@ -140,7 +144,8 @@ func (d *WorkerDaemon) doReduceTask(id int, key string, mapNum int) {
 	output,err := os.Create(ofile)
 	if err!=nil{
 		log.Printf("fail to create %v\n",ofile)
-		//TODO: Report error to master
+		d.SetStatus(Idle)
+		return
 	}
 
 	for k,v := range mp{
@@ -152,7 +157,6 @@ func (d *WorkerDaemon) doReduceTask(id int, key string, mapNum int) {
 	args, reply := TaskArgs{Id: id, Type: ReduceTask, Worker: d.Id}, EmptyArgsOrReply{}
 	if ok := callMaster("Master.TaskComplete", &args, &reply); ok {
 		d.SetStatus(Idle)
-		//TODO: free worker to execute another task
 	}
 
 }
@@ -163,7 +167,6 @@ func (d *WorkerDaemon) ReportStatusToMaster(status int) {
 	if ok := callMaster("Master.Interrupt", &args, &reply); ok {
 	} else {
 		log.Println("Report status to master error")
-		//TODO:
 	}
 }
 

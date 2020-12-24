@@ -180,7 +180,6 @@ func (m *Master) scheduleMap() {
 					m.Workers[worker] = Working
 				} else {
 					m.Workers[worker] = Unknown
-					//TODO: handle call error
 				}
 
 				m.WorkersMutex.Unlock()
@@ -247,7 +246,6 @@ func (m *Master) scheduleReduce() {
 					m.Workers[worker] = Working
 				} else {
 					m.Workers[worker] = Unknown
-					//TODO: handle call error
 				}
 
 				m.WorkersMutex.Unlock()
