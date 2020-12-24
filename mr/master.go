@@ -102,7 +102,6 @@ func (m *Master) Done() bool {
 	m.PhaseMutex.Lock()
 	defer m.PhaseMutex.Unlock()
 
-	fmt.Println("DONE-DONE-DONE-DONE")
 	return m.Phase == Finish
 
 }
@@ -115,6 +114,8 @@ func (m *Master) Done() bool {
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{}
 	// Your code here.
+	logfile,_ := os.Create("mr-master-log")
+	log.SetOutput(logfile)
 
 	m.Workers = make(map[string]int)
 	m.WorkersCond = sync.NewCond(&m.WorkersMutex)

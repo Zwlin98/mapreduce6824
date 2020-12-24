@@ -180,6 +180,9 @@ func Worker(mapf func(string, string) []KeyValue,
 		Status:  Initial,
 	}
 
+	logfile,_ := os.Create(fmt.Sprintf("mr-worker-%v-log",d.Id))
+	log.SetOutput(logfile)
+
 	//Register worker to master
 	args, reply := RegisterArgs{Id: d.Id}, RegisterReply{}
 	if ok := callMaster("Master.Register", &args, &reply); !ok {
@@ -187,7 +190,7 @@ func Worker(mapf func(string, string) []KeyValue,
 	}
 	log.Printf("Worker is registered to master\n")
 
-	fmt.Println(reply.NReduce)
+
 	d.nReduce = reply.NReduce
 
 	d.server()
