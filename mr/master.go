@@ -186,7 +186,7 @@ func (m *Master) scheduleMap() {
 
 				select {
 				case <-time.After(10 * time.Second):
-					task.Status = Idle
+					task.Status = TaskIdle
 					log.Printf("Map Task %v is Out Of time\n", id)
 				case <-task.Complete:
 					task.Status = TaskComplete
@@ -252,7 +252,7 @@ func (m *Master) scheduleReduce() {
 
 				select {
 				case <-time.After(10 * time.Second):
-					task.Status = Idle
+					task.Status = TaskIdle
 					log.Printf("Map Task %v is Out Of time\n", id)
 				case <-task.Complete:
 					task.Status = TaskComplete

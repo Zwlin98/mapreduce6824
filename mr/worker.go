@@ -203,7 +203,7 @@ func Worker(mapf func(string, string) []KeyValue,
 	go func() {
 		for {
 			d.StatusMutex.RLock()
-			go d.ReportStatusToMaster(d.Status)
+			d.ReportStatusToMaster(d.Status)
 			d.StatusMutex.RUnlock()
 			time.Sleep(time.Second)
 		}
